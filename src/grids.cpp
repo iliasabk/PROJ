@@ -742,6 +742,21 @@ bool GTiffGrid::valueAt(uint16_t sample, int x, int yFromBottom,
     if (m_planarConfig == PLANARCONFIG_CONTIG)
         offsetInBlock = offsetInBlock * m_samplesPerPixel + sample;
 
+    // The fetched block is sized from the IFD as it exists now, while
+    // the block geometry was captured when the grid was opened. If the
+    // remote GeoTIFF layout changed in between, offsetInBlock can fall
+    // beyond the retrieved block.
+    const auto nElemSize = (m_dt == TIFFDataType::Int16 ||
+                            m_dt == TIFFDataType::UInt16)
+                               ? sizeof(uint16_t)
+                           : m_dt == TIFFDataType::Float64
+                               ? sizeof(double)
+                               : sizeof(uint32_t);
+    if (static_cast<size_t>(offsetInBlock) >=
+        pBuffer->size() / nElemSize) {
+        return false;
+    }
+
     switch (m_dt) {
     case TIFFDataType::Int16:
         out = readValue<short>(*pBuffer, offsetInBlock, sample);
@@ -841,6 +856,14 @@ bool GTiffGrid::valuesAt(int x_start, int y_start, int x_count, int y_count,
             }
         }
 
+        // The fetched block is sized from the IFD as it exists now,
+        // while the 256-pixel block geometry was captured when the
+        // grid was opened. If the remote GeoTIFF layout changed in
+        // between (HTTP validators can stay identical), the element
+        // offsets computed below can fall beyond the retrieved block.
+        const auto nBufferElemCount =
+            static_cast<size_t>(pBuffer->size() / sizeof(float));
+
         uint32_t offsetInBlockStart = blockXOff + blockYOff * 256U;
 
         if (sample_count == m_samplesPerPixel) {
@@ -851,6 +874,11 @@ bool GTiffGrid::valuesAt(int x_start, int y_start, int x_count, int y_count,
                      256 * (m_bottomUp ? y : y_count - 1 - y)) *
                         m_samplesPerPixel +
                     sample_idx[0];
+                if (static_cast<size_t>(offsetInBlock) +
+                        static_cast<size_t>(sample_count_mul_x_count) >
+                    nBufferElemCount) {
+                    return false;
+                }
                 memcpy(out,
                        reinterpret_cast<const float *>(pBuffer->data()) +
                            offsetInBlock,
@@ -866,6 +894,16 @@ bool GTiffGrid::valuesAt(int x_start, int y_start, int x_count, int y_count,
                          256 * (m_bottomUp ? y : y_count - 1 - y)) *
                             m_samplesPerPixel +
                         sample_idx[0];
+                    // Last element touched by the inner loop:
+                    // offsetInBlock + (x_count-1)*m_samplesPerPixel +
+                    // (sample_count-1)
+                    if (static_cast<size_t>(offsetInBlock) +
+                            static_cast<size_t>(x_count - 1) *
+                                    m_samplesPerPixel +
+                            static_cast<size_t>(sample_count) >
+                        nBufferElemCount) {
+                        return false;
+                    }
                     const float *in_ptr =
                         reinterpret_cast<const float *>(pBuffer->data()) +
                         offsetInBlock;
@@ -883,6 +921,16 @@ bool GTiffGrid::valuesAt(int x_start, int y_start, int x_count, int y_count,
                          256 * (m_bottomUp ? y : y_count - 1 - y)) *
                             m_samplesPerPixel +
                         sample_idx[0];
+                    // Last element touched by the inner loop:
+                    // offsetInBlock + (x_count-1)*m_samplesPerPixel +
+                    // (sample_count-1)
+                    if (static_cast<size_t>(offsetInBlock) +
+                            static_cast<size_t>(x_count - 1) *
+                                    m_samplesPerPixel +
+                            static_cast<size_t>(sample_count) >
+                        nBufferElemCount) {
+                        return false;
+                    }
                     const float *in_ptr =
                         reinterpret_cast<const float *>(pBuffer->data()) +
                         offsetInBlock;
@@ -900,6 +948,16 @@ bool GTiffGrid::valuesAt(int x_start, int y_start, int x_count, int y_count,
                          256 * (m_bottomUp ? y : y_count - 1 - y)) *
                             m_samplesPerPixel +
                         sample_idx[0];
+                    // Last element touched by the inner loop:
+                    // offsetInBlock + (x_count-1)*m_samplesPerPixel +
+                    // (sample_count-1)
+                    if (static_cast<size_t>(offsetInBlock) +
+                            static_cast<size_t>(x_count - 1) *
+                                    m_samplesPerPixel +
+                            static_cast<size_t>(sample_count) >
+                        nBufferElemCount) {
+                        return false;
+                    }
                     const float *in_ptr =
                         reinterpret_cast<const float *>(pBuffer->data()) +
                         offsetInBlock;
