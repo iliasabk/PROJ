@@ -1455,10 +1455,18 @@ size_t NetworkFile::read(void *buffer, size_t sizeBytes) {
                                           std::move(chunk));
             }
         }
+        const auto nOffsetInRegion = iterOffset - offsetToDownload;
+        if (nOffsetInRegion >= region.size()) {
+            // The range response does not cover the requested position
+            // (a truncated response or a stale short chunk): there is no
+            // byte available for iterOffset. Stop instead of wrapping
+            // the unsigned subtraction below and reading out of bounds.
+            break;
+        }
         const size_t nToCopy = static_cast<size_t>(
             std::min(static_cast<unsigned long long>(sizeBytes),
-                     region.size() - (iterOffset - offsetToDownload)));
-        memcpy(buffer, region.data() + iterOffset - offsetToDownload, nToCopy);
+                     region.size() - nOffsetInRegion));
+        memcpy(buffer, region.data() + nOffsetInRegion, nToCopy);
         buffer = static_cast<char *>(buffer) + nToCopy;
         iterOffset += nToCopy;
         sizeBytes -= nToCopy;
