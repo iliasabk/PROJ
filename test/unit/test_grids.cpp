@@ -32,6 +32,11 @@
 
 #include "proj_internal.h" // M_PI
 
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
+
 namespace {
 
 // ---------------------------------------------------------------------------
@@ -137,6 +142,89 @@ TEST_F(GridTest, GenericShiftGridSet_null) {
     gridSet->reassign_context(m_ctxt2);
     gridSet->reopen(m_ctxt2);
 }
+
+// ---------------------------------------------------------------------------
+
+TEST_F(GridTest, HorizontalShiftGridSet_ntv2_oversized_columns) {
+    // Craft an NTv2 file whose sub-grid resolution implies more than
+    // INT_MAX / 4 columns. Without validation at open() time, the grid width
+    // overflows int arithmetic in NTv2Grid::valueAt() when sizing the line
+    // buffer (4 * m_width), causing a heap-buffer-overflow on the subsequent
+    // fread().
+    std::vector<char> content(11 * 16 + 11 * 16 + 4 * 16, 0);
+
+    const auto setRecordInt = [&content](int offset, const char *name,
+                                       int v) {
+        memcpy(&content[offset], name, 8);
+        memcpy(&content[offset + 8], &v, 4);
+    };
+    const auto setRecordUInt = [&content](int offset, const char *name,
+                                        unsigned v) {
+        memcpy(&content[offset], name, 8);
+        memcpy(&content[offset + 8], &v, 4);
+    };
+    const auto setRecordDouble = [&content](int offset, const char *name,
+                                          double v) {
+        memcpy(&content[offset], name, 8);
+        memcpy(&content[offset + 8], &v, 8);
+    };
+    const auto setRecordStr = [&content](int offset, const char *name,
+                                       const char *v) {
+        memcpy(&content[offset], name, 8);
+        memcpy(&content[offset + 8], v, 8);
+    };
+
+    // Overview header
+    setRecordInt(0, "NUM_OREC", 11);
+    setRecordInt(16, "NUM_SREC", 11);
+    setRecordInt(32, "NUM_FILE", 1);
+    setRecordStr(48, "GS_TYPE ", "SECONDS ");
+    setRecordStr(64, "VERSION ", "        ");
+    setRecordStr(80, "SYSTEM_F", "        ");
+    setRecordStr(96, "SYSTEM_T", "        ");
+    setRecordDouble(112, "MAJOR_F ", 0.0);
+    setRecordDouble(128, "MINOR_F ", 0.0);
+    setRecordDouble(144, "MAJOR_T ", 0.0);
+    setRecordDouble(160, "MINOR_T ", 0.0);
+
+    // Sub-file header. Extent and resolution are chosen so that the implied
+    // column count is ~2**30 + 1 while still passing the georeferencing
+    // sanity checks.
+    const int subfile = 11 * 16;
+    setRecordStr(subfile + 0, "SUB_NAME", "GRID1   ");
+    setRecordStr(subfile + 16, "PARENT  ", "NONE    ");
+    setRecordStr(subfile + 32, "CREATED ", "        ");
+    setRecordStr(subfile + 48, "UPDATED ", "        ");
+    setRecordDouble(subfile + 64, "S_LAT   ", 0.0);
+    setRecordDouble(subfile + 80, "N_LAT   ", 2.0);
+    setRecordDouble(subfile + 96, "E_LONG  ", 0.0);
+    setRecordDouble(subfile + 112, "W_LONG  ", 2147483.648);
+    setRecordDouble(subfile + 128, "LAT_INC ", 1.0);
+    setRecordDouble(subfile + 144, "LON_INC ", 0.002);
+    setRecordUInt(subfile + 160, "GS_COUNT", 3U * 1073741825U);
+
+    const char *tempdir = getenv("TEMP");
+    if (!tempdir) {
+        tempdir = getenv("TMP");
+    }
+#ifndef _WIN32
+    if (!tempdir) {
+        tempdir = "/tmp";
+    }
+#endif
+    ASSERT_TRUE(tempdir != nullptr);
+    const std::string filename(std::string(tempdir) +
+                               "/test_ntv2_oversized_columns.gsb");
+    FILE *f = fopen(filename.c_str(), "wb");
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(fwrite(content.data(), 1, content.size(), f), content.size());
+    fclose(f);
+
+    EXPECT_EQ(NS_PROJ::HorizontalShiftGridSet::open(m_ctxt, filename), nullptr);
+    remove(filename.c_str());
+}
+
+// ---------------------------------------------------------------------------
 
 #ifdef TIFF_ENABLED
 

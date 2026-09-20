@@ -1897,10 +1897,19 @@ NTv1Grid *NTv1Grid::open(PJ_CONTEXT *ctx, std::unique_ptr<File> fp,
                                PROJ_ERR_INVALID_OP_FILE_NOT_FOUND_OR_INVALID);
         return nullptr;
     }
-    const int columns = static_cast<int>(
-        fabs((extent.east - extent.west) * extent.invResX + 0.5) + 1);
-    const int rows = static_cast<int>(
-        fabs((extent.north - extent.south) * extent.invResY + 0.5) + 1);
+    const double columnsAsDouble =
+        fabs((extent.east - extent.west) * extent.invResX + 0.5) + 1;
+    const double rowsAsDouble =
+        fabs((extent.north - extent.south) * extent.invResY + 0.5) + 1;
+    if (columnsAsDouble > INT_MAX / 4 || rowsAsDouble > INT_MAX) {
+        pj_log(ctx, PJ_LOG_ERROR, _("Invalid grid size for %s"),
+               filename.c_str());
+        proj_context_errno_set(
+            ctx, PROJ_ERR_INVALID_OP_FILE_NOT_FOUND_OR_INVALID);
+        return nullptr;
+    }
+    const int columns = static_cast<int>(columnsAsDouble);
+    const int rows = static_cast<int>(rowsAsDouble);
 
     return new NTv1Grid(ctx, std::move(fp), filename, columns, rows, extent);
 }
@@ -2289,10 +2298,19 @@ std::unique_ptr<NTv2GridSet> NTv2GridSet::open(PJ_CONTEXT *ctx,
                 ctx, PROJ_ERR_INVALID_OP_FILE_NOT_FOUND_OR_INVALID);
             return nullptr;
         }
-        const int columns = static_cast<int>(
-            fabs((extent.east - extent.west) * extent.invResX + 0.5) + 1);
-        const int rows = static_cast<int>(
-            fabs((extent.north - extent.south) * extent.invResY + 0.5) + 1);
+        const double columnsAsDouble =
+            fabs((extent.east - extent.west) * extent.invResX + 0.5) + 1;
+        const double rowsAsDouble =
+            fabs((extent.north - extent.south) * extent.invResY + 0.5) + 1;
+        if (columnsAsDouble > INT_MAX / 4 || rowsAsDouble > INT_MAX) {
+            pj_log(ctx, PJ_LOG_ERROR, _("Invalid grid size for %s"),
+                   filename.c_str());
+            proj_context_errno_set(
+                ctx, PROJ_ERR_INVALID_OP_FILE_NOT_FOUND_OR_INVALID);
+            return nullptr;
+        }
+        const int columns = static_cast<int>(columnsAsDouble);
+        const int rows = static_cast<int>(rowsAsDouble);
         if (columns > largestLine)
             largestLine = columns;
 
