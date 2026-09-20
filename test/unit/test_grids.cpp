@@ -427,6 +427,19 @@ TEST_F(GridTest, GenericShiftGridSet_gtiff_projected) {
     EXPECT_EQ(grid->extentAndRes().resY, 1000);
 }
 
+// ---------------------------------------------------------------------------
+
+TEST_F(GridTest, VerticalShiftGridSet_gtiff_metadata_oob_sample) {
+    // GDAL_METADATA offset/scale items use a zero-based "sample" attribute.
+    // A sample index equal to samplesPerPixel used to pass the bounds check
+    // and write one element past the m_adfOffset/m_adfScale vectors
+    // (heap-buffer-overflow). The offending item must now be ignored.
+    auto gridSet = NS_PROJ::VerticalShiftGridSet::open(
+        m_ctxt, "tests/test_vgrid_metadata_oob_sample.tif");
+    ASSERT_NE(gridSet, nullptr);
+    EXPECT_EQ(gridSet->format(), "gtiff");
+}
+
 #endif // TIFF_ENABLED
 
 } // namespace
